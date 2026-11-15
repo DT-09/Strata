@@ -17,7 +17,10 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "recharts": "^2.15.0",
-    "sql-formatter": "^15.4.6"
+    "sql-formatter": "^15.4.6",
+    "@codemirror/lang-sql": "^6.10.0",
+    "@codemirror/theme-one-dark": "^6.1.2",
+    "codemirror": "^6.0.1"
   },
   "devDependencies": {
     "@types/react": "^18.3.18",
