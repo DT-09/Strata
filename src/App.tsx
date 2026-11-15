@@ -48,7 +48,10 @@ function readStoredProject(): { nodes: StrataNode[]; edges: ProjectFile['edges']
     const project = JSON.parse(raw) as ProjectFile;
     if (project.version !== 1 || !Array.isArray(project.nodes) || !Array.isArray(project.edges)) return null;
     executionOrder(project.nodes, project.edges);
-    return { nodes: project.nodes, edges: project.edges };
+    const nodes = project.nodes.map((node) => node.data.kind === 'source'
+      ? { ...node, data: { ...node.data, source: undefined, status: 'idle' as const } }
+      : node);
+    return { nodes, edges: project.edges };
   } catch { return null; }
 }
 
@@ -84,14 +87,14 @@ function App() {
   }, [setEdges]);
 
   const importFiles = async (files: FileList | File[]) => {
-    let placeholderAvailable = nodes.some((node) => node.id === 'source-demo' && !node.data.source);
+    const pendingSources = nodes.filter((node) => node.data.kind === 'source' && !node.data.source).map((node) => node.id);
     for (const file of Array.from(files)) {
       try {
         const source: SourceData = await importFile(file);
-        if (placeholderAvailable) {
-          placeholderAvailable = false;
-          setNodes((old) => old.map((node) => node.id === 'source-demo' ? { ...node, data: { ...node.data, label: source.table, source, status: 'success' } } : node));
-          setSelectedId('source-demo');
+        const placeholderId = pendingSources.shift();
+        if (placeholderId) {
+          setNodes((old) => old.map((node) => node.id === placeholderId ? { ...node, data: { ...node.data, label: source.table, source, status: 'success' } } : node));
+          setSelectedId(placeholderId);
         } else {
           const id = `source-${crypto.randomUUID()}`;
           setNodes((old) => [...old, { id, type: 'strata', position: { x: 100 + old.length * 35, y: 360 + old.length * 20 }, data: { kind: 'source', label: source.table, source, status: 'success' } }]);
