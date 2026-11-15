@@ -24,9 +24,14 @@ export function useDuckDB() {
       try {
         const bundles = duckdb.getJsDelivrBundles();
         const bundle = await duckdb.selectBundle(bundles);
-        worker = new Worker(bundle.mainWorker!);
+        const workerUrl = URL.createObjectURL(new Blob(
+          [`importScripts("${bundle.mainWorker}");`],
+          { type: 'text/javascript' },
+        ));
+        worker = new Worker(workerUrl);
         db = new duckdb.AsyncDuckDB(new duckdb.ConsoleLogger(), worker);
         await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+        URL.revokeObjectURL(workerUrl);
         const conn = await db.connect();
         if (active) { setEngine({ db, conn }); setState('ready'); }
         else { await conn.close(); await db.terminate(); }
@@ -91,7 +96,10 @@ export function useDuckDB() {
     const result = await engine.conn.query(sql);
     return {
       columns: result.schema.fields.map((field) => field.name),
-      rows: result.toArray().map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, typeof value === 'bigint' ? Number(value) : value])) as Record<string, unknown>),
+      rows: result.toArray().map((row) => {
+        const record = row.toJSON() as Record<string, unknown>;
+        return Object.fromEntries(Object.entries(record).map(([key, value]) => [key, typeof value === 'bigint' ? Number(value) : value]));
+      }),
       durationMs: Math.round(performance.now() - start),
     };
   }, [engine]);
