@@ -4,7 +4,7 @@ import {
   useEdgesState, useNodesState, type Connection, type NodeProps,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Activity, ArrowDownToLine, Braces, ChartNoAxesCombined, Code2, Database, FileJson, FilePlus2, GitCompareArrows, HardDrive, Layers3, Play, Save, Settings2, Table2, Upload, X, Zap } from 'lucide-react';
+import { Activity, ArrowDownToLine, Braces, ChartNoAxesCombined, Clock3, Code2, Database, FileJson, FilePlus2, GitCompareArrows, HardDrive, Layers3, Play, Save, Settings2, Table2, Upload, X, Zap } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { format } from 'sql-formatter';
 import { useDuckDB } from './lib/useDuckDB';
@@ -149,7 +149,7 @@ function App() {
           setNodes((old) => old.map((item) => item.id === node.id ? { ...item, data: { ...item.data, status: 'success', rows: output.rows, columns: output.columns, durationMs: output.durationMs, error: undefined } } : item));
           log(`${d.label}: ${output.rows.length} preview rows in ${output.durationMs} ms.`);
         } else if (d.kind === 'diff') {
-          const names = parentIds.map((id) => relations.get(id)).filter(Boolean);
+          const names = parentIds.map((id) => relations.get(id)).filter((name): name is string => Boolean(name));
           if (names.length !== 2) throw new Error('Dataset diff needs exactly two connected inputs.');
           const left = quoteIdentifier(names[0]); const right = quoteIdentifier(names[1]);
           const diffSql = `SELECT 'left_only' AS _change, * FROM (SELECT * FROM ${left} EXCEPT ALL SELECT * FROM ${right}) UNION ALL SELECT 'right_only' AS _change, * FROM (SELECT * FROM ${right} EXCEPT ALL SELECT * FROM ${left})`;
