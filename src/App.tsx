@@ -63,13 +63,14 @@ function App() {
   }, [setEdges]);
 
   const importFiles = async (files: FileList | File[]) => {
+    let placeholderAvailable = nodes.some((node) => node.id === 'source-demo' && !node.data.source);
     for (const file of Array.from(files)) {
       try {
         const source: SourceData = await importFile(file);
-        const placeholder = nodes.find((node) => node.id === 'source-demo' && !node.data.source);
-        if (placeholder) {
-          setNodes((old) => old.map((node) => node.id === placeholder.id ? { ...node, data: { ...node.data, label: source.table, source, status: 'success' } } : node));
-          setSelectedId(placeholder.id);
+        if (placeholderAvailable) {
+          placeholderAvailable = false;
+          setNodes((old) => old.map((node) => node.id === 'source-demo' ? { ...node, data: { ...node.data, label: source.table, source, status: 'success' } } : node));
+          setSelectedId('source-demo');
         } else {
           const id = `source-${crypto.randomUUID()}`;
           setNodes((old) => [...old, { id, type: 'strata', position: { x: 100 + old.length * 35, y: 360 + old.length * 20 }, data: { kind: 'source', label: source.table, source, status: 'success' } }]);
