@@ -4,6 +4,13 @@ import * as duckdb from '@duckdb/duckdb-wasm';
 type EngineState = 'starting' | 'ready' | 'error';
 type Engine = { db: duckdb.AsyncDuckDB; conn: duckdb.AsyncDuckDBConnection };
 
+function quoteIdentifier(value: string) {
+  return '"' + value.replace(/"/g, '""') + '"';
+}
+function quoteLiteral(value: string) {
+  return "'" + value.replace(/'/g, "''") + "'";
+}
+
 export function useDuckDB() {
   const [engine, setEngine] = useState<Engine | null>(null);
   const [state, setState] = useState<EngineState>('starting');
@@ -40,31 +47,40 @@ export function useDuckDB() {
   const importFile = useCallback(async (file: File) => {
     if (!engine) throw new Error('The SQL engine is not ready.');
     const safeName = file.name.replace(/[^a-zA-Z0-9_.-]/g, '_');
-    const table = safeName.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_]/g, '_') || 'dataset';
+    const base = file.name.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_]/g, '_') || 'dataset';
     const buffer = new Uint8Array(await file.arrayBuffer());
     await engine.db.registerFileBuffer(safeName, buffer);
     const ext = file.name.split('.').pop()?.toLowerCase();
-    const quoted = '"' + table.replace(/"/g, '""') + '"';
+    let table = base;
     if (ext === 'csv' || ext === 'tsv') {
-      await engine.conn.query(`CREATE OR REPLACE VIEW ${quoted} AS SELECT * FROM read_csv_auto('${safeName.replace(/'/g, "''")}', header=true)`);
+      await engine.conn.query(`CREATE OR REPLACE VIEW ${quoteIdentifier(table)} AS SELECT * FROM read_csv_auto(${quoteLiteral(safeName)}, header=true)`);
     } else if (ext === 'parquet') {
-      await engine.conn.query(`CREATE OR REPLACE VIEW ${quoted} AS SELECT * FROM read_parquet('${safeName.replace(/'/g, "''")}')`);
+      await engine.conn.query(`CREATE OR REPLACE VIEW ${quoteIdentifier(table)} AS SELECT * FROM read_parquet(${quoteLiteral(safeName)})`);
     } else if (ext === 'json' || ext === 'jsonl' || ext === 'ndjson') {
-      await engine.conn.query(`CREATE OR REPLACE VIEW ${quoted} AS SELECT * FROM read_json_auto('${safeName.replace(/'/g, "''")}')`);
+      await engine.conn.query(`CREATE OR REPLACE VIEW ${quoteIdentifier(table)} AS SELECT * FROM read_json_auto(${quoteLiteral(safeName)})`);
     } else if (ext === 'db' || ext === 'sqlite' || ext === 'sqlite3') {
       try {
         await engine.conn.query('INSTALL sqlite; LOAD sqlite;');
-        await engine.conn.query(`ATTACH '${safeName.replace(/'/g, "''")}' AS sqlite_source (TYPE SQLITE)`);
-        await engine.conn.query(`CREATE OR REPLACE VIEW ${quoted} AS SELECT * FROM sqlite_source.sqlite_master WHERE type = 'table'`);
-      } catch {
-        throw new Error('SQLite import needs DuckDB’s SQLite extension. The extension could not be loaded in this browser session. CSV, Parquet and JSON imports do not need this extension.');
+        const alias = `strata_sqlite_${crypto.randomUUID().replace(/-/g, '')}`;
+        await engine.conn.query(`ATTACH ${quoteLiteral(safeName)} AS ${quoteIdentifier(alias)} (TYPE SQLITE)`);
+        const catalog = await engine.conn.query(`SELECT name FROM ${quoteIdentifier(alias)}.sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name`);
+        const names = catalog.toArray().map((row) => String(row.name));
+        if (!names.length) throw new Error('The SQLite file contains no user tables.');
+        for (const name of names) {
+          const viewName = `${base}_${name}`;
+          await engine.conn.query(`CREATE OR REPLACE VIEW ${quoteIdentifier(viewName)} AS SELECT * FROM ${quoteIdentifier(alias)}.${quoteIdentifier(name)}`);
+        }
+        table = `${base}_${names[0]}`;
+      } catch (cause) {
+        const detail = cause instanceof Error ? cause.message : String(cause);
+        throw new Error(`SQLite import failed. DuckDB's SQLite extension must be available in this browser session. ${detail}`);
       }
     } else {
       throw new Error('Unsupported file type. Choose CSV, TSV, Parquet, JSON, JSONL or SQLite.');
     }
-    const schema = await engine.conn.query(`DESCRIBE SELECT * FROM ${quoted}`);
+    const schema = await engine.conn.query(`DESCRIBE SELECT * FROM ${quoteIdentifier(table)}`);
     const columns = schema.toArray().map((row) => String(row.column_name));
-    const count = await engine.conn.query(`SELECT COUNT(*) AS n FROM ${quoted}`);
+    const count = await engine.conn.query(`SELECT COUNT(*) AS n FROM ${quoteIdentifier(table)}`);
     const rows = Number(count.toArray()[0]?.n ?? 0);
     return { table, fileName: file.name, bytes: file.size, columns, rows };
   }, [engine]);
