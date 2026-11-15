@@ -193,12 +193,39 @@ function App() {
     setMessage('Project graph exported. Source files are not embedded.');
   };
   const exportSql = () => {
-    const statements = executionOrder(nodes, edges)
-      .filter((node) => node.data.kind === 'query')
-      .map((node) => `-- ${node.data.label}\n${node.data.sql ?? ''}`);
-    if (!statements.length) { setMessage('Add a SQL node before exporting a pipeline.'); return; }
-    download(new Blob([statements.join('\n\n') + '\n'], { type: 'text/sql;charset=utf-8' }), 'strata-pipeline.sql');
-    setMessage('SQL pipeline exported.');
+    try {
+      const statements: string[] = ['-- STRATA pipeline SQL', '-- Source tables must already exist in the DuckDB session.', ''];
+      const relations = new Map<string, string>();
+      for (const node of executionOrder(nodes, edges)) {
+        const data = node.data as StrataNodeData;
+        const parents = edges.filter((edge) => edge.target === node.id).map((edge) => edge.source);
+        if (data.kind === 'source') {
+          if (data.source) {
+            relations.set(node.id, data.source.table);
+            statements.push(`-- Source: ${data.source.fileName} → ${quoteIdentifier(data.source.table)}`);
+          }
+        } else if (data.kind === 'query') {
+          const input = parents.map((id) => relations.get(id)).find(Boolean);
+          if (!input) throw new Error(`SQL node “${data.label}” has no resolvable input.`);
+          const view = `strata_${node.id.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+          const sql = (data.sql ?? '').replace(/\$input\b/g, quoteIdentifier(input));
+          statements.push(`-- Transform: ${data.label}\nCREATE OR REPLACE TEMP VIEW ${quoteIdentifier(view)} AS\n${sql.replace(/;\\s*$/, '')};`);
+          relations.set(node.id, view);
+        } else if (data.kind === 'diff') {
+          const inputs = parents.map((id) => relations.get(id)).filter((name): name is string => Boolean(name));
+          if (inputs.length !== 2) throw new Error(`Diff node “${data.label}” needs two resolvable inputs.`);
+          const view = `strata_${node.id.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+          const left = quoteIdentifier(inputs[0]); const right = quoteIdentifier(inputs[1]);
+          statements.push(`-- Difference: ${data.label}\nCREATE OR REPLACE TEMP VIEW ${quoteIdentifier(view)} AS\nSELECT 'left_only' AS _change, * FROM (SELECT * FROM ${left} EXCEPT ALL SELECT * FROM ${right}) UNION ALL SELECT 'right_only' AS _change, * FROM (SELECT * FROM ${right} EXCEPT ALL SELECT * FROM ${left});`);
+          relations.set(node.id, view);
+        } else if (parents[0] && relations.has(parents[0])) {
+          relations.set(node.id, relations.get(parents[0])!);
+        }
+      }
+      if (statements.length <= 3) { setMessage('Add a SQL or diff node before exporting a pipeline.'); return; }
+      download(new Blob([statements.join('\n\n') + '\n'], { type: 'text/sql;charset=utf-8' }), 'strata-pipeline.sql');
+      setMessage('SQL pipeline exported.');
+    } catch (error) { setMessage(error instanceof Error ? error.message : String(error)); }
   };
   const exportCsv = () => {
     if (!resultColumns.length) return;
