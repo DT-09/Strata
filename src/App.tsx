@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   addEdge, Background, BackgroundVariant, Controls, MiniMap, ReactFlow,
   useEdgesState, useNodesState, type Connection, type NodeProps,
@@ -39,10 +39,24 @@ const starterNodes: StrataNode[] = [
   { id: 'result-demo', type: 'strata', position: { x: 790, y: 170 }, data: { kind: 'result', label: 'Result table' } },
 ];
 
+const starterEdges = [{ id: 'e1', source: 'source-demo', target: 'query-demo', animated: true }, { id: 'e2', source: 'query-demo', target: 'result-demo', animated: true }];
+
+function readStoredProject(): { nodes: StrataNode[]; edges: ProjectFile['edges'] } | null {
+  try {
+    const raw = localStorage.getItem('strata:workspace:v1');
+    if (!raw) return null;
+    const project = JSON.parse(raw) as ProjectFile;
+    if (project.version !== 1 || !Array.isArray(project.nodes) || !Array.isArray(project.edges)) return null;
+    executionOrder(project.nodes, project.edges);
+    return { nodes: project.nodes, edges: project.edges };
+  } catch { return null; }
+}
+
 function App() {
   const { state: engineState, error: engineError, importFile, query } = useDuckDB();
-  const [nodes, setNodes, onNodesChange] = useNodesState<StrataNode>(starterNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([{ id: 'e1', source: 'source-demo', target: 'query-demo', animated: true }, { id: 'e2', source: 'query-demo', target: 'result-demo', animated: true }]);
+  const [restored] = useState(readStoredProject);
+  const [nodes, setNodes, onNodesChange] = useNodesState<StrataNode>(restored?.nodes ?? starterNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(restored?.edges ?? starterEdges);
   const [selectedId, setSelectedId] = useState('query-demo');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('Ready when the engine is online.');
@@ -56,6 +70,13 @@ function App() {
   const selectedData = selected?.data as StrataNodeData | undefined;
   const sources = nodes.filter((node) => node.data.kind === 'source');
   const chartRows = useMemo(() => resultRows.slice(0, 100).filter((row) => typeof Object.values(row)[1] === 'number'), [resultRows]);
+
+  useEffect(() => {
+    try {
+      const project: ProjectFile = { version: 1, name: 'Untitled workspace', nodes, edges, savedAt: new Date().toISOString() };
+      localStorage.setItem('strata:workspace:v1', JSON.stringify(project));
+    } catch { setMessage('Local project storage is unavailable; export the graph to keep a copy.'); }
+  }, [nodes, edges]);
 
   const log = (line: string) => setLogs((old) => [`[${new Date().toLocaleTimeString()}] ${line}`, ...old].slice(0, 100));
   const onConnect = useCallback((connection: Connection) => {
