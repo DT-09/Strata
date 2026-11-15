@@ -72,7 +72,7 @@ function App() {
   const selected = nodes.find((node) => node.id === selectedId);
   const selectedData = selected?.data as StrataNodeData | undefined;
   const sources = nodes.filter((node) => node.data.kind === 'source');
-  const chartRows = useMemo(() => resultRows.slice(0, 100).filter((row) => typeof Object.values(row)[1] === 'number'), [resultRows]);
+  const chartRows = useMemo(() => resultRows.slice(0, 100).filter((row) => Object.values(row).some((value) => typeof value === 'number')), [resultRows]);
 
   useEffect(() => {
     try {
@@ -85,6 +85,16 @@ function App() {
   const onConnect = useCallback((connection: Connection) => {
     setEdges((eds) => addEdge({ ...connection, animated: true, style: { stroke: '#b88c5b', strokeWidth: 1.5 } }, eds));
   }, [setEdges]);
+
+  const loadDemo = async () => {
+    try {
+      const response = await fetch('/demo-orders.csv');
+      if (!response.ok) throw new Error('The sample dataset could not be loaded.');
+      const file = new File([await response.blob()], 'orders.csv', { type: 'text/csv' });
+      await importFiles([file]);
+      log('Loaded the bundled sample dataset.');
+    } catch (error) { setMessage(error instanceof Error ? error.message : String(error)); }
+  };
 
   const importFiles = async (files: FileList | File[]) => {
     const pendingSources = nodes.filter((node) => node.data.kind === 'source' && !node.data.source).map((node) => node.id);
@@ -210,8 +220,9 @@ function App() {
     <div className="main-layout">
       <aside className="left-rail">
         <div className="rail-section"><div className="rail-label">BUILD</div>
-          <button className="rail-action" onClick={() => fileRef.current?.click()}><Upload size={15}/><span>Import data</span><kbd>⌘ I</kbd></button>
-          <button className="rail-action" onClick={() => addNode('query')}><Code2 size={15}/><span>SQL transform</span><kbd>Q</kbd></button>
+          <button className="rail-action" onClick={() => fileRef.current?.click()}><Upload size={15}/><span>Import data</span></button>
+          <button className="rail-action" onClick={loadDemo}><Database size={15}/><span>Load sample data</span></button>
+          <button className="rail-action" onClick={() => addNode('query')}><Code2 size={15}/><span>SQL transform</span></button>
           <button className="rail-action" onClick={() => addNode('result')}><Table2 size={15}/><span>Data preview</span></button>
           <button className="rail-action" onClick={() => addNode('chart')}><ChartNoAxesCombined size={15}/><span>Chart output</span></button>
           <button className="rail-action" onClick={() => addNode('diff')}><GitCompareArrows size={15}/><span>Dataset diff</span></button>
