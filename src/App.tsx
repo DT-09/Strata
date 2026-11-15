@@ -8,6 +8,7 @@ import { Activity, ArrowDownToLine, Braces, ChartNoAxesCombined, Clock3, Code2, 
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { format } from 'sql-formatter';
 import { useDuckDB } from './lib/useDuckDB';
+import { SqlEditor } from './components/SqlEditor';
 import { executionOrder } from './lib/graph';
 import type { ProjectFile, SourceData, StrataNode, StrataNodeData } from './lib/types';
 
@@ -191,6 +192,14 @@ function App() {
     download(new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' }), 'strata-project.json');
     setMessage('Project graph exported. Source files are not embedded.');
   };
+  const exportSql = () => {
+    const statements = executionOrder(nodes, edges)
+      .filter((node) => node.data.kind === 'query')
+      .map((node) => `-- ${node.data.label}\n${node.data.sql ?? ''}`);
+    if (!statements.length) { setMessage('Add a SQL node before exporting a pipeline.'); return; }
+    download(new Blob([statements.join('\n\n') + '\n'], { type: 'text/sql;charset=utf-8' }), 'strata-pipeline.sql');
+    setMessage('SQL pipeline exported.');
+  };
   const exportCsv = () => {
     if (!resultColumns.length) return;
     const cell = (value: unknown) => '"' + String(value ?? '').replace(/"/g, '""') + '"';
@@ -237,7 +246,7 @@ function App() {
       <main className="workspace">
         <div className="canvas-toolbar">
           <div><span className="canvas-heading">Pipeline canvas</span><span className="canvas-subtitle"> / {nodes.length} nodes · {edges.length} connections</span></div>
-          <div className="canvas-tools"><button onClick={() => fileRef.current?.click()}><FilePlus2 size={14}/> Add source</button><button onClick={exportProject}><FileJson size={14}/> Export graph</button></div>
+          <div className="canvas-tools"><button onClick={() => fileRef.current?.click()}><FilePlus2 size={14}/> Add source</button><button onClick={exportSql}><Code2 size={14}/> Export SQL</button><button onClick={exportProject}><FileJson size={14}/> Export graph</button></div>
         </div>
         <div className="canvas-area" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); if (event.dataTransfer.files.length) void importFiles(event.dataTransfer.files); }}>
           <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect} onNodeClick={(_, node) => setSelectedId(node.id)} fitView fitViewOptions={{ padding: 0.2 }} minZoom={0.25} maxZoom={1.5} deleteKeyCode={['Backspace', 'Delete']}>
@@ -261,7 +270,7 @@ function App() {
           <label className="field-label" htmlFor="node-label">NAME</label><input id="node-label" className="text-input" value={selectedData.label} onChange={(event) => updateSelected({ label: event.target.value })}/>
           {selectedData.kind === 'query' && <>
             <div className="editor-heading"><span className="field-label">SQL EDITOR</span><button onClick={() => { try { updateSelected({ sql: format(selectedData.sql ?? '', { language: 'sql' }) }); } catch { /* keep original SQL */ } }}><Zap size={12}/> Format</button></div>
-            <textarea className="sql-editor" spellCheck={false} value={selectedData.sql ?? ''} onChange={(event) => updateSelected({ sql: event.target.value })} />
+            <SqlEditor value={selectedData.sql ?? ''} onChange={(sql) => updateSelected({ sql })} />
             <div className="sql-help"><span>$input</span> resolves to the first connected source or upstream query. Imported tables can also be referenced by name.</div>
           </>}
           {selectedData.kind === 'source' && <div className="source-details"><div><span>FILE</span><strong>{selectedData.source?.fileName ?? 'No file attached'}</strong></div><div><span>ROWS</span><strong>{selectedData.source?.rows.toLocaleString() ?? '—'}</strong></div><div><span>SIZE</span><strong>{selectedData.source ? (selectedData.source.bytes / 1024 / 1024).toFixed(2) + ' MB' : '—'}</strong></div></div>}
