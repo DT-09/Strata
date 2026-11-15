@@ -152,9 +152,11 @@ function App() {
           const names = parentIds.map((id) => relations.get(id)).filter(Boolean);
           if (names.length !== 2) throw new Error('Dataset diff needs exactly two connected inputs.');
           const left = quoteIdentifier(names[0]); const right = quoteIdentifier(names[1]);
-          const output = await query(`SELECT 'left_only' AS _change, * FROM (SELECT * FROM ${left} EXCEPT ALL SELECT * FROM ${right}) UNION ALL SELECT 'right_only' AS _change, * FROM (SELECT * FROM ${right} EXCEPT ALL SELECT * FROM ${left})`);
-          outputs.set(node.id, output);
+          const diffSql = `SELECT 'left_only' AS _change, * FROM (SELECT * FROM ${left} EXCEPT ALL SELECT * FROM ${right}) UNION ALL SELECT 'right_only' AS _change, * FROM (SELECT * FROM ${right} EXCEPT ALL SELECT * FROM ${left})`;
           const viewName = `__strata_${node.id.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+          await query(`CREATE OR REPLACE TEMP VIEW ${quoteIdentifier(viewName)} AS ${diffSql}`);
+          const output = await query(`SELECT * FROM ${quoteIdentifier(viewName)} LIMIT 100000`);
+          outputs.set(node.id, output);
           relations.set(node.id, viewName);
           setNodes((old) => old.map((item) => item.id === node.id ? { ...item, data: { ...item.data, status: 'success', rows: output.rows, columns: output.columns, durationMs: output.durationMs } } : item));
         } else if (parentOutputs.length) {
