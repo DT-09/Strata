@@ -7,11 +7,11 @@ STRATA turns local analytical files into executable visual pipelines. DuckDB-Was
 ## What works
 
 - **Local ingestion:** CSV, TSV, Parquet and JSON/JSONL. SQLite files are supported through DuckDB's SQLite extension; loading that extension may require network access. Dataset bytes are not uploaded to a STRATA backend.
-- **SQL execution:** DuckDB-Wasm runs in a dedicated worker. SQL nodes create temporary views, so downstream SQL nodes can use the previous node's output through `$input`.
+- **SQL execution:** DuckDB-Wasm runs in a dedicated worker. SQL nodes create temporary views, so downstream SQL nodes can use the previous node's output through `$input`. CodeMirror provides SQL highlighting and completion.
 - **Visual pipeline:** connect source, SQL, result, chart and diff nodes. The execution planner validates the graph and rejects cycles.
 - **Data comparison:** a diff node accepts two inputs and reports rows found only on the left or right using multiset `EXCEPT ALL`.
 - **Results:** inspect a bounded preview, inspect source columns, view execution logs and render a basic bar chart.
-- **Export/import:** export the graph as JSON, restore a graph from JSON, and export the current result preview as CSV.
+- **Export/import:** export the graph as JSON, restore a graph from JSON, export the SQL pipeline as `.sql`, and export the current result preview as CSV.
 - **Local recovery:** the graph is saved to browser localStorage. Source file bytes remain in the in-memory DuckDB session and must be re-imported after a page reload.
 
 ## Quick start
