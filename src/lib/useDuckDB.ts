@@ -20,30 +20,37 @@ export function useDuckDB() {
     let active = true;
     let worker: Worker | undefined;
     let db: duckdb.AsyncDuckDB | undefined;
+    let conn: duckdb.AsyncDuckDBConnection | undefined;
+    let workerUrl: string | undefined;
     (async () => {
       try {
         const bundles = duckdb.getJsDelivrBundles();
         const bundle = await duckdb.selectBundle(bundles);
-        const workerUrl = URL.createObjectURL(new Blob(
+        workerUrl = URL.createObjectURL(new Blob(
           [`importScripts("${bundle.mainWorker}");`],
           { type: 'text/javascript' },
         ));
         worker = new Worker(workerUrl);
         db = new duckdb.AsyncDuckDB(new duckdb.ConsoleLogger(), worker);
         await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
-        URL.revokeObjectURL(workerUrl);
-        const conn = await db.connect();
+        conn = await db.connect();
         if (active) { setEngine({ db, conn }); setState('ready'); }
         else { await conn.close(); await db.terminate(); }
       } catch (cause) {
         if (active) { setError(cause instanceof Error ? cause.message : String(cause)); setState('error'); }
+        try { await conn?.close(); } catch { /* ignore teardown failures */ }
+        try { await db?.terminate(); } catch { /* ignore teardown failures */ }
+        worker?.terminate();
+      } finally {
+        if (workerUrl) URL.revokeObjectURL(workerUrl);
       }
     })();
     return () => {
       active = false;
-      void engine?.conn.close();
+      void conn?.close();
       void db?.terminate();
       worker?.terminate();
+      if (workerUrl) URL.revokeObjectURL(workerUrl);
     };
   // Engine is deliberately not a dependency: initialization is one-shot.
   // eslint-disable-next-line react-hooks/exhaustive-deps
