@@ -243,7 +243,7 @@ function App() {
           if (!input) throw new Error(`SQL node “${data.label}” has no resolvable input.`);
           const view = `strata_${node.id.replace(/[^a-zA-Z0-9_]/g, '_')}`;
           const sql = (data.sql ?? '').replace(/\$input\b/g, quoteIdentifier(input));
-          statements.push(`-- Transform: ${data.label}\nCREATE OR REPLACE TEMP VIEW ${quoteIdentifier(view)} AS\n${sql.replace(/;\\s*$/, '')};`);
+          statements.push(`-- Transform: ${data.label}\nCREATE OR REPLACE TEMP VIEW ${quoteIdentifier(view)} AS\n${sql.replace(/;\s*$/, '')};`);
           relations.set(node.id, view);
         } else if (data.kind === 'diff') {
           const inputs = parents.map((id) => relations.get(id)).filter((name): name is string => Boolean(name));
