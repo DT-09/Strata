@@ -108,7 +108,7 @@ function App() {
         }
       }
     })();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; sourceRestoreStarted.current = false; };
   }, [engineState, importFile, setNodes]);
 
   const log = (line: string) => setLogs((old) => [`[${new Date().toLocaleTimeString()}] ${line}`, ...old].slice(0, 100));
