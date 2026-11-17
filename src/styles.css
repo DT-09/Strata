@@ -2,3 +2,35 @@
 .chart-wrap{height:100%;min-height:160px;padding:12px 18px 8px}.table-export{height:30px;display:flex;justify-content:flex-end;align-items:center;padding:0 12px;border-bottom:1px solid #26272e}.table-export button{display:flex;align-items:center;gap:5px;background:transparent;border:0;color:#c49a6c;font:9px 'DM Mono',monospace}.table-wrap:has(.table-export){display:flex;flex-direction:column}.table-wrap:has(.table-export) table{overflow:auto}.table-wrap:has(.table-export) table thead{position:sticky;top:0}
 
 .sql-editor-host{height:210px;min-height:160px;resize:vertical;overflow:hidden;border:1px solid #303139;border-radius:5px;background:#0d0e12}.sql-editor-host:focus-within{border-color:#92704e}.sql-editor-host .cm-editor{height:100%;outline:none}.sql-editor-host .cm-scroller{overflow:auto}.sql-editor-host .cm-tooltip-autocomplete{font:10px 'DM Mono',monospace}
+
+@media(max-width:1050px){
+  body{min-width:0}
+  .main-layout{grid-template-columns:176px minmax(0,1fr)}
+  .inspector{display:none}
+}
+@media(max-width:680px){
+  .app-shell{height:100dvh;min-height:600px}
+  .topbar{height:52px;padding:0 10px}
+  .brand{gap:7px;font-size:11px;letter-spacing:1.5px}
+  .workspace-name,.brand-divider,.top-center,.engine-pill{display:none}
+  .top-actions{gap:7px}
+  .icon-button{width:28px;height:28px}
+  .run-button{padding:0 8px;font-size:9px}
+  .main-layout{grid-template-columns:minmax(0,1fr)}
+  .left-rail,.inspector{display:none}
+  .canvas-toolbar{height:44px;padding:0 10px}
+  .canvas-tools{gap:4px}
+  .canvas-tools button{padding:6px;font-size:0}
+  .canvas-tools button svg{width:15px;height:15px}
+  .canvas-tools button:nth-child(2),.canvas-tools button:nth-child(3){display:none}
+  .canvas-area{height:calc(100% - 270px);min-height:220px}
+  .bottom-panel{height:226px}
+  .panel-header{padding:0 8px}
+  .panel-tabs{gap:9px}
+  .panel-tabs button{font-size:8px;letter-spacing:0}
+  .panel-status{max-width:36%;font-size:8px}
+  .table-wrap table{font-size:9px}
+  .table-wrap th,.table-wrap td{padding:7px 9px}
+  .statusbar{padding:0 8px;font-size:7px}
+  .canvas-hint{font-size:8px;max-width:90%;overflow:hidden}
+}
