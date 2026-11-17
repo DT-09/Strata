@@ -10,6 +10,7 @@ import { format } from 'sql-formatter';
 import { useDuckDB } from './lib/useDuckDB';
 import { SqlEditor } from './components/SqlEditor';
 import { executionOrder } from './lib/graph';
+import { readSourceFile, saveSourceFile } from './lib/storage';
 import type { ProjectFile, SourceData, StrataNode, StrataNodeData } from './lib/types';
 
 const initialSql = `SELECT
@@ -50,7 +51,7 @@ function readStoredProject(): { nodes: StrataNode[]; edges: ProjectFile['edges']
     if (project.version !== 1 || !Array.isArray(project.nodes) || !Array.isArray(project.edges)) return null;
     executionOrder(project.nodes, project.edges);
     const nodes = project.nodes.map((node) => node.data.kind === 'source'
-      ? { ...node, data: { ...node.data, source: undefined, status: 'idle' as const } }
+      ? { ...node, data: { ...node.data, status: 'idle' as const } }
       : node);
     return { nodes, edges: project.edges };
   } catch { return null; }
@@ -70,6 +71,9 @@ function App() {
   const [logs, setLogs] = useState<string[]>(['Workspace initialized.', 'Local execution runtime starting…']);
   const fileRef = useRef<HTMLInputElement>(null);
   const projectRef = useRef<HTMLInputElement>(null);
+  const sourceRestoreStarted = useRef(false);
+  const nodesRef = useRef(nodes);
+  nodesRef.current = nodes;
   const selected = nodes.find((node) => node.id === selectedId);
   const selectedData = selected?.data as StrataNodeData | undefined;
   const sources = nodes.filter((node) => node.data.kind === 'source');
@@ -81,6 +85,31 @@ function App() {
       localStorage.setItem('strata:workspace:v1', JSON.stringify(project));
     } catch { setMessage('Local project storage is unavailable; export the graph to keep a copy.'); }
   }, [nodes, edges]);
+
+  useEffect(() => {
+    if (engineState !== 'ready' || sourceRestoreStarted.current) return;
+    sourceRestoreStarted.current = true;
+    let cancelled = false;
+    void (async () => {
+      const savedSources = nodesRef.current.filter((node) => node.data.kind === 'source' && node.data.source);
+      for (const node of savedSources) {
+        try {
+          const file = await readSourceFile(node.id);
+          if (!file) continue;
+          const source = await importFile(file);
+          if (cancelled) return;
+          setNodes((old) => old.map((item) => item.id === node.id
+            ? { ...item, data: { ...item.data, source, label: source.table, status: 'success', error: undefined } }
+            : item));
+          setLogs((old) => [`[${new Date().toLocaleTimeString()}] Recovered ${file.name} from this browser.`, ...old].slice(0, 100));
+        } catch (cause) {
+          const detail = cause instanceof Error ? cause.message : String(cause);
+          setLogs((old) => [`[${new Date().toLocaleTimeString()}] Could not recover ${node.data.source?.fileName ?? node.id}: ${detail}`, ...old].slice(0, 100));
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [engineState, importFile, setNodes]);
 
   const log = (line: string) => setLogs((old) => [`[${new Date().toLocaleTimeString()}] ${line}`, ...old].slice(0, 100));
   const onConnect = useCallback((connection: Connection) => {
@@ -103,13 +132,18 @@ function App() {
       try {
         const source: SourceData = await importFile(file);
         const placeholderId = pendingSources.shift();
+        const sourceNodeId = placeholderId ?? `source-${crypto.randomUUID()}`;
+        try { await saveSourceFile(sourceNodeId, file); }
+        catch (cause) {
+          const detail = cause instanceof Error ? cause.message : String(cause);
+          log(`Local recovery unavailable for ${file.name}: ${detail}`);
+        }
         if (placeholderId) {
           setNodes((old) => old.map((node) => node.id === placeholderId ? { ...node, data: { ...node.data, label: source.table, source, status: 'success' } } : node));
           setSelectedId(placeholderId);
         } else {
-          const id = `source-${crypto.randomUUID()}`;
-          setNodes((old) => [...old, { id, type: 'strata', position: { x: 100 + old.length * 35, y: 360 + old.length * 20 }, data: { kind: 'source', label: source.table, source, status: 'success' } }]);
-          setSelectedId(id);
+          setNodes((old) => [...old, { id: sourceNodeId, type: 'strata', position: { x: 100 + old.length * 35, y: 360 + old.length * 20 }, data: { kind: 'source', label: source.table, source, status: 'success' } }]);
+          setSelectedId(sourceNodeId);
         }
         log(`Imported ${file.name}: ${source.rows.toLocaleString()} rows, ${source.columns.length} columns.`);
         setMessage(`${file.name} imported`);
