@@ -33,9 +33,10 @@ export function useDuckDB() {
         worker = new Worker(workerUrl);
         db = new duckdb.AsyncDuckDB(new duckdb.ConsoleLogger(), worker);
         await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
-        conn = await db.connect();
-        if (active) { setEngine({ db, conn }); setState('ready'); }
-        else { await conn.close(); await db.terminate(); }
+        const connection = await db.connect();
+        conn = connection;
+        if (active) { setEngine({ db, conn: connection }); setState('ready'); }
+        else { await connection.close(); await db.terminate(); }
       } catch (cause) {
         if (active) { setError(cause instanceof Error ? cause.message : String(cause)); setState('error'); }
         try { await conn?.close(); } catch { /* ignore teardown failures */ }
